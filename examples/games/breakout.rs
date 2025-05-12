@@ -2,10 +2,21 @@
 //!
 //! Demonstrates Bevy's stepping capabilities if compiled with the `bevy_debug_stepping` feature.
 
+use std::process::ExitCode;
 use bevy::{
     math::bounding::{Aabb2d, BoundingCircle, BoundingVolume, IntersectsVolume},
     prelude::*,
 };
+
+use bevy::app::AppExit;
+
+use bevy::{
+    color::palettes::css::GOLD,
+    diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
+    prelude::*,
+};
+
+use bevy::input::keyboard::Key::Exit;
 
 mod stepping;
 
@@ -42,17 +53,31 @@ const GAP_BETWEEN_BRICKS_AND_SIDES: f32 = 20.0;
 const SCOREBOARD_FONT_SIZE: f32 = 33.0;
 const SCOREBOARD_TEXT_PADDING: Val = Val::Px(5.0);
 
+const LIVES_FONT_SIZE: f32 = 33.0;
+const LIVES_TEXT_PADDING: Val = Val::Px(5.0);
+const LIVES_TOP_PADDING: Val = Val::Px(50.0); // Moves it lower down
+
 const BACKGROUND_COLOR: Color = Color::srgb(0.9, 0.9, 0.9);
-const PADDLE_COLOR: Color = Color::srgb(0.3, 0.3, 0.7);
-const BALL_COLOR: Color = Color::srgb(1.0, 0.5, 0.5);
+const PADDLE_COLOR: Color = Color::srgb(0.0, 0.8, 0.2); // bright green
+const BALL_COLOR: Color = Color::srgb(1.0, 0.55, 0.0); // orange
 const BRICK_COLOR: Color = Color::srgb(0.5, 0.5, 1.0);
 const WALL_COLOR: Color = Color::srgb(0.8, 0.8, 0.8);
 const TEXT_COLOR: Color = Color::srgb(0.5, 0.5, 1.0);
 const SCORE_COLOR: Color = Color::srgb(1.0, 0.5, 0.5);
+const LIVE_COLOR: Color = Color::srgb(1.0, 0.5, 0.5);
+
+// Game states
+#[derive(States, PartialEq, Eq, Clone, Hash, Debug, Default)]
+enum GameState {
+    #[default]
+    Playing,
+    GameOver,
+}
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .init_state::<GameState>()
         .add_plugins(
             stepping::SteppingPlugin::default()
                 .add_schedule(Update)
@@ -60,6 +85,7 @@ fn main() {
                 .at(Val::Percent(35.0), Val::Percent(50.0)),
         )
         .insert_resource(Score(0))
+        .insert_resource(Lives(3))
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .add_event::<CollisionEvent>()
         .add_systems(Startup, setup)
@@ -76,6 +102,7 @@ fn main() {
                 // `chain`ing systems together runs them in order
                 .chain(),
         )
+        .add_systems(OnEnter(GameState::GameOver), game_over_screen)
         .add_systems(Update, update_scoreboard)
         .run();
 }
@@ -107,6 +134,10 @@ struct Collider;
 #[require(Sprite, Transform, Collider)]
 struct Wall;
 
+// Marker struct to help identify the color-changing Text component
+#[derive(Component)]
+struct AnimatedText;
+
 /// Which side of the arena is this wall located on?
 enum WallLocation {
     Left,
@@ -114,6 +145,8 @@ enum WallLocation {
     Bottom,
     Top,
 }
+
+
 
 impl WallLocation {
     /// Location of the *center* of the wall, used in `transform.translation()`
@@ -174,12 +207,19 @@ struct Score(usize);
 #[derive(Component)]
 struct ScoreboardUi;
 
+#[derive(Component)]
+struct LivesUi;
+
+#[derive(Resource, Deref, DerefMut)]
+struct Lives(usize);
+
 // Add the game's entities to our world
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     asset_server: Res<AssetServer>,
+    lives: Res<Lives>,
 ) {
     // Camera
     commands.spawn(Camera2d);
@@ -237,10 +277,40 @@ fn setup(
         )],
     ));
 
+    // Lives
+    commands.spawn((
+        Text::new("Lives: "),
+        TextFont {
+            font_size: LIVES_FONT_SIZE,
+            ..default()
+        },
+        TextColor(TEXT_COLOR),
+        LivesUi,
+        Node {
+            position_type: PositionType::Absolute,
+            top: LIVES_TOP_PADDING,
+            left: LIVES_TEXT_PADDING,
+            ..default()
+        },
+        children![(
+            TextSpan::from(lives.to_string()),
+            TextFont {
+                font_size: LIVES_FONT_SIZE,
+                ..default()
+            },
+            TextColor(LIVE_COLOR),
+        )],
+    ));
+
+
     // Walls
     commands.spawn(Wall::new(WallLocation::Left));
     commands.spawn(Wall::new(WallLocation::Right));
-    commands.spawn(Wall::new(WallLocation::Bottom));
+    commands.spawn((
+        Wall::new(WallLocation::Bottom),
+        BottomWall, // 👈 tag it
+    ));
+
     commands.spawn(Wall::new(WallLocation::Top));
 
     // Bricks
@@ -303,11 +373,11 @@ fn move_paddle(
     let mut direction = 0.0;
 
     if keyboard_input.pressed(KeyCode::ArrowLeft) {
-        direction -= 1.0;
+        direction -= 2.0;
     }
 
     if keyboard_input.pressed(KeyCode::ArrowRight) {
-        direction += 1.0;
+        direction += 2.0;
     }
 
     // Calculate the new horizontal paddle position based on player input
@@ -337,16 +407,63 @@ fn update_scoreboard(
     *writer.text(*score_root, 1) = score.to_string();
 }
 
+fn check_for_game_over(mut next_state: ResMut<NextState<GameState>>) {
+    next_state.set(GameState::GameOver);
+}
+
+fn game_over_screen(mut commands: Commands, asset_server: Res<AssetServer>) {
+    commands.spawn((
+        // Accepts a `String` or any type that converts into a `String`, such as `&str`
+        Text::new("GAME OVER!"),
+        TextFont {
+            // This font is loaded and will be used instead of the default font.
+            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+            font_size: 67.0,
+            ..default()
+        },
+        TextShadow::default(),
+        // Set the justification of the Text
+        TextLayout::new_with_justify(JustifyText::Center),
+        // Set the style of the Node itself.
+        Node {
+            position_type: PositionType::Absolute,
+            bottom: Val::Px(5.0),
+            right: Val::Px(5.0),
+            ..default()
+        },
+        AnimatedText,
+    ));
+}
+
+#[derive(Component)]
+struct BottomWall;
+
 fn check_for_collisions(
     mut commands: Commands,
     mut score: ResMut<Score>,
+    mut next_state: ResMut<NextState<GameState>>,
     ball_query: Single<(&mut Velocity, &Transform), With<Ball>>,
-    collider_query: Query<(Entity, &Transform, Option<&Brick>), With<Collider>>,
+    collider_query: Query<(Entity, &Transform, Option<&Brick>, Option<&BottomWall>), With<Collider>>,
     mut collision_events: EventWriter<CollisionEvent>,
 ) {
     let (mut ball_velocity, ball_transform) = ball_query.into_inner();
 
-    for (collider_entity, collider_transform, maybe_brick) in &collider_query {
+    for (entity, transform, maybe_brick, maybe_bottom_wall) in &collider_query {
+        if let Some(collision) = ball_collision(
+            BoundingCircle::new(ball_transform.translation.truncate(), BALL_DIAMETER / 2.),
+            Aabb2d::new(
+                transform.translation.truncate(),
+                transform.scale.truncate() / 2.,
+            ),
+        ){
+            if collision == Collision::Bottom && maybe_bottom_wall.is_some() {
+                next_state.set(GameState::GameOver);
+                return;
+            }
+        }
+    }
+
+    for (collider_entity, collider_transform, maybe_brick, maybe_bottom_wall) in &collider_query {
         let collision = ball_collision(
             BoundingCircle::new(ball_transform.translation.truncate(), BALL_DIAMETER / 2.),
             Aabb2d::new(
