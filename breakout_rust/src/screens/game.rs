@@ -22,7 +22,7 @@ use crate::stepping;
 use bevy::input::keyboard::Key::Exit;
 
 use menu::menu_plugin;
-
+use menu::{NORMAL_BUTTON, MenuButtonAction};
 // These constants are defined in `Transform` units.
 // Using the default 2D camera they correspond 1:1 with screen pixels.
 const PADDLE_SIZE: Vec2 = Vec2::new(120.0, 20.0);
@@ -133,7 +133,7 @@ pub fn game_plugin(app: &mut App) {
     .add_systems(Update, check_game_over.run_if(in_state(GameState::Game)))
     .add_systems(
         OnEnter(GameState::GameOver),
-        game_over_screen,
+        setup_game_over_menu,
     )
     .add_systems(
         OnExit(GameState::GameOver),
@@ -442,31 +442,93 @@ fn update_scoreboard(
     *writer.text(*score_root, 1) = score.to_string();
 }
 
+fn setup_game_over_menu(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let button_style = Node {
+        width: Val::Px(200.0),
+        height: Val::Px(60.0),
+        margin: UiRect::all(Val::Px(15.0)),
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::Center,
+        ..default()
+    };
 
-fn game_over_screen(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let icon_style = Node {
+        width: Val::Px(24.0),
+        position_type: PositionType::Absolute,
+        left: Val::Px(10.0),
+        ..default()
+    };
+
+    let font = TextFont {
+        font_size: 30.0,
+        ..default()
+    };
+
+    // let restart_icon = asset_server.load("textures/Game Icons/right.png");
+    let quit_icon = asset_server.load("textures/Game Icons/exitRight.png");
+
     commands.spawn((
-        OnGameOverScreen,
-        // Accepts a `String` or any type that converts into a `String`, such as `&str`
-        Text::new("GAME OVER!"),
-        TextFont {
-            // This font is loaded and will be used instead of the default font.
-            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-            font_size: 67.0,
-            ..default()
-        },
-        TextShadow::default(),
-        // Set the justification of the Text
-        TextLayout::new_with_justify(JustifyText::Center),
-        // Set the style of the Node itself.
         Node {
-            position_type: PositionType::Absolute,
-            bottom: Val::Px(5.0),
-            right: Val::Px(5.0),
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
             ..default()
         },
-        AnimatedText,
+        OnGameOverScreen,
+        children![(
+            Node {
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(NORMAL_BUTTON),
+            children![
+                (
+                    Text::new("Game Over"),
+                    TextFont {
+                        font_size: 64.0,
+                        ..default()
+                    },
+                    TextColor(BALL_COLOR),
+                    Node {
+                        margin: UiRect::all(Val::Px(40.0)),
+                        ..default()
+                    },
+                ),
+                // (
+                //     Button,
+                //     button_style.clone(),
+                //     BackgroundColor(NORMAL_BUTTON),
+                //     MenuButtonAction::Retry, // new variant
+                //     children![
+                //         (ImageNode::new(restart_icon), icon_style.clone()),
+                //         (
+                //             Text::new("Restart"),
+                //             font.clone(),
+                //             TextColor(TEXT_COLOR)
+                //         ),
+                //     ]
+                // ),
+                (
+                    Button,
+                    button_style,
+                    BackgroundColor(NORMAL_BUTTON),
+                    MenuButtonAction::Quit,
+                    children![
+                        (ImageNode::new(quit_icon), icon_style),
+                        (
+                            Text::new("Exit"),
+                            font,
+                            TextColor(TEXT_COLOR)
+                        ),
+                    ]
+                )
+            ]
+        )],
     ));
 }
+
 
 #[derive(Component)]
 struct BottomWall;

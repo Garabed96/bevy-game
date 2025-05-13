@@ -94,7 +94,7 @@ mod menu {
     #[derive(Component)]
     struct OnSoundSettingsMenuScreen;
 
-    const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
+    pub const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
     const HOVERED_BUTTON: Color = Color::srgb(0.25, 0.25, 0.25);
     const HOVERED_PRESSED_BUTTON: Color = Color::srgb(0.25, 0.65, 0.25);
     const PRESSED_BUTTON: Color = Color::srgb(0.35, 0.75, 0.35);
@@ -105,13 +105,14 @@ mod menu {
 
     // All actions that can be triggered from a button click
     #[derive(Component)]
-    enum MenuButtonAction {
+    pub enum MenuButtonAction {
         Play,
         Settings,
         SettingsDisplay,
         SettingsSound,
         BackToMainMenu,
         BackToSettings,
+        // Retry,
         Quit,
     }
 
@@ -517,3 +518,4 @@ mod menu {
 
 
 pub use menu::menu_plugin;
+pub use menu::{NORMAL_BUTTON, MenuButtonAction};
