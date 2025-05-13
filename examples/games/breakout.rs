@@ -56,6 +56,7 @@ const SCOREBOARD_TEXT_PADDING: Val = Val::Px(5.0);
 const LIVES_FONT_SIZE: f32 = 33.0;
 const LIVES_TEXT_PADDING: Val = Val::Px(5.0);
 const LIVES_TOP_PADDING: Val = Val::Px(50.0); // Moves it lower down
+const INITIAL_LIVES: usize = 3;
 
 const BACKGROUND_COLOR: Color = Color::srgb(0.9, 0.9, 0.9);
 const PADDLE_COLOR: Color = Color::srgb(0.0, 0.8, 0.2); // bright green
@@ -85,7 +86,7 @@ fn main() {
                 .at(Val::Percent(35.0), Val::Percent(50.0)),
         )
         .insert_resource(Score(0))
-        .insert_resource(Lives(3))
+        .insert_resource(Lives(INITIAL_LIVES))
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .add_event::<CollisionEvent>()
         .add_systems(Startup, setup)
@@ -103,7 +104,7 @@ fn main() {
                 .chain(),
         )
         .add_systems(OnEnter(GameState::GameOver), game_over_screen)
-        .add_systems(Update, update_scoreboard)
+        .add_systems(Update, (update_scoreboard, update_lives))
         .run();
 }
 
@@ -205,6 +206,9 @@ impl Wall {
 struct Score(usize);
 
 #[derive(Component)]
+struct Deadly;
+
+#[derive(Component)]
 struct ScoreboardUi;
 
 #[derive(Component)]
@@ -293,7 +297,7 @@ fn setup(
             ..default()
         },
         children![(
-            TextSpan::from(lives.to_string()),
+            TextSpan::default(),
             TextFont {
                 font_size: LIVES_FONT_SIZE,
                 ..default()
@@ -306,11 +310,7 @@ fn setup(
     // Walls
     commands.spawn(Wall::new(WallLocation::Left));
     commands.spawn(Wall::new(WallLocation::Right));
-    commands.spawn((
-        Wall::new(WallLocation::Bottom),
-        BottomWall, // 👈 tag it
-    ));
-
+    commands.spawn((Wall::new(WallLocation::Bottom), Deadly));
     commands.spawn(Wall::new(WallLocation::Top));
 
     // Bricks
@@ -438,32 +438,25 @@ fn game_over_screen(mut commands: Commands, asset_server: Res<AssetServer>) {
 #[derive(Component)]
 struct BottomWall;
 
+fn update_lives(
+    lives: Res<Lives>,
+    lives_root: Single<Entity, (With<Text>, With<LivesUi>)>,
+    mut writer: TextUiWriter,
+) {
+    *writer.text(*lives_root, 1) = lives.to_string();
+}
+
 fn check_for_collisions(
     mut commands: Commands,
     mut score: ResMut<Score>,
-    mut next_state: ResMut<NextState<GameState>>,
-    ball_query: Single<(&mut Velocity, &Transform), With<Ball>>,
-    collider_query: Query<(Entity, &Transform, Option<&Brick>, Option<&BottomWall>), With<Collider>>,
+    mut lives: ResMut<Lives>,
+    ball_query: Single<(&mut Velocity, &mut Transform), With<Ball>>,
+    collider_query: Query<(Entity, &Transform, Option<&Brick>, Option<&Deadly>), (With<Collider>, Without<Ball>)>,
     mut collision_events: EventWriter<CollisionEvent>,
 ) {
-    let (mut ball_velocity, ball_transform) = ball_query.into_inner();
+    let (mut ball_velocity, mut ball_transform) = ball_query.into_inner();
 
-    for (entity, transform, maybe_brick, maybe_bottom_wall) in &collider_query {
-        if let Some(collision) = ball_collision(
-            BoundingCircle::new(ball_transform.translation.truncate(), BALL_DIAMETER / 2.),
-            Aabb2d::new(
-                transform.translation.truncate(),
-                transform.scale.truncate() / 2.,
-            ),
-        ){
-            if collision == Collision::Bottom && maybe_bottom_wall.is_some() {
-                next_state.set(GameState::GameOver);
-                return;
-            }
-        }
-    }
-
-    for (collider_entity, collider_transform, maybe_brick, maybe_bottom_wall) in &collider_query {
+    for (collider_entity, collider_transform, maybe_brick, maybe_deadly) in &collider_query {
         let collision = ball_collision(
             BoundingCircle::new(ball_transform.translation.truncate(), BALL_DIAMETER / 2.),
             Aabb2d::new(
@@ -480,6 +473,13 @@ fn check_for_collisions(
             if maybe_brick.is_some() {
                 commands.entity(collider_entity).despawn();
                 **score += 1;
+            }
+
+            if maybe_deadly.is_some() {
+                ball_transform.translation = BALL_STARTING_POSITION;
+                ball_velocity.0 = INITIAL_BALL_DIRECTION.normalize() * BALL_SPEED;
+
+                **lives -= 1;
             }
 
             // Reflect the ball's velocity when it collides
