@@ -33,7 +33,7 @@ members = [
   # Internal tools that are not published.
   "tools/*",
   # Bevy's error codes. This is a crate so we can automatically check all of the code blocks.
-  "errors",
+  "errors", "breakout_rust",
 ]
 exclude = [
   # Integration tests are not part of the workspace
