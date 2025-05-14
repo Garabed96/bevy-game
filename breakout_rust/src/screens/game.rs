@@ -444,9 +444,46 @@ fn setup_texture_character(
         index: animation_indices_character.first,
     };
 
-    commands.spawn(Sprite::from_image(
-        asset_server.load("textures/player_idle_0.png"),
-    ));
+    // TODO: Add ability to name your character, save in json for now
+    let sprint_sheets = [
+        SpriteSheet {
+            size: Vec2::new(300., 256.),
+            text: "Champ Champ".to_string(),
+            transform: Transform {
+                translation: Vec3::new(1. * 300. * 0.25, 0.0, 0.0),
+                ..Transform::from_scale(Vec3::splat(0.25))
+            },
+            texture: character.clone(),
+            image_mode: SpriteImageMode::Auto,
+            atlas: character_atlas.clone(),
+            indices: animation_indices_character.clone(),
+            timer: AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
+        }
+    ];
+
+    for sprite_sheet in sprint_sheets {
+        let mut cmd = commands.spawn((
+            Sprite {
+                image_mode: sprite_sheet.image_mode,
+                custom_size: Some(sprite_sheet.size),
+                ..Sprite::from_atlas_image(sprite_sheet.texture.clone(), sprite_sheet.atlas.clone())
+            },
+            sprite_sheet.indices,
+            sprite_sheet.timer,
+            sprite_sheet.transform,
+        ));
+
+        cmd.with_children(|builder| {
+            builder.spawn((
+                Text2d::new(sprite_sheet.text),
+                TextLayout::new_with_justify(JustifyText::Center),
+                TextColor(TEXT_COLOR),
+                TextFont::from_font_size(55.),
+                Transform::from_xyz(0., -256. * 0.5 - 10., 0.),
+                bevy::sprite::Anchor::BottomCenter,
+            ));
+        });
+    }
 }
 
 #[derive(Component)]
