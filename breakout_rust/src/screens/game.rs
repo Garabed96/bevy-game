@@ -1,6 +1,4 @@
-//! A simplified implementation of the classic game "Breakout".
-//!
-//! Demonstrates Bevy's stepping capabilities if compiled with the `bevy_debug_stepping` feature.
+use bevy::prelude::*;
 
 use bevy::{
     math::bounding::{Aabb2d, BoundingCircle, BoundingVolume, IntersectsVolume},
@@ -9,7 +7,6 @@ use bevy::{
 use std::process::ExitCode;
 
 use bevy::app::AppExit;
-
 use bevy::{
     color::palettes::css::GOLD,
     diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
@@ -65,7 +62,6 @@ const GAP_BETWEEN_PADDLE_AND_FLOOR: f32 = 60.0;
 const PADDLE_SPEED: f32 = 500.0;
 // How close can the paddle get to the wall
 const PADDLE_PADDING: f32 = 10.0;
-
 // We set the z-value of the ball to 1 so it renders on top in the case of overlapping sprites.
 const BALL_STARTING_POSITION: Vec3 = Vec3::new(0.0, -50.0, 1.0);
 const BALL_DIAMETER: f32 = 30.;
@@ -108,6 +104,9 @@ const SCORE_COLOR: Color = Color::srgb(1.0, 0.5, 0.5);
 const LIVE_COLOR: Color = Color::srgb(1.0, 0.5, 0.5);
 
 #[derive(Component)]
+struct Player;
+
+#[derive(Component)]
 struct Paddle;
 
 #[derive(Component)]
@@ -146,12 +145,11 @@ enum WallLocation {
     Top,
 }
 
+use crate::{despawn_screen, DisplayQuality, GameState, Volume};
 use bevy::{
     color::palettes::basic::{BLUE, LIME},
     prelude::*,
 };
-
-use crate::{despawn_screen, DisplayQuality, GameState, Volume};
 
 // This plugin will contain the game. In this case, it's just be a screen that will
 // display the current settings for 5 seconds before returning to the menu
@@ -162,43 +160,48 @@ pub fn game_plugin(app: &mut App) {
             .add_schedule(FixedUpdate)
             .at(Val::Percent(35.0), Val::Percent(50.0)),
     )
-        .insert_resource(Score(0))
-        .insert_resource(load_high_score())
-        .insert_resource(ClearColor(BACKGROUND_COLOR))
-        .insert_resource(Lives(INITIAL_LIVES))
-        .add_event::<CollisionEvent>()
-        .add_systems(OnEnter(GameState::Game), game_setup)
-        .add_systems(
-            FixedUpdate,
-            (
-                apply_velocity,
-                move_paddle,
-                check_for_collisions,
-                play_collision_sound,
-            )
-                // `chain`ing systems together runs them in order
-                .chain()
-                .run_if(in_state(GameState::Game)),
+    .insert_resource(Score(0))
+    .insert_resource(load_high_score())
+    .insert_resource(ClearColor(BACKGROUND_COLOR))
+    .insert_resource(Lives(INITIAL_LIVES))
+    .add_event::<CollisionEvent>()
+    .add_systems(OnEnter(GameState::Game), game_setup)
+    .add_systems(
+        FixedUpdate,
+        (
+            apply_velocity,
+            move_paddle,
+            check_for_collisions,
+            play_collision_sound,
+            setup_main_character,
         )
-        .add_systems(
-            Update,
-            (update_scoreboard, update_lives, update_high_score).run_if(in_state(GameState::Game)),
-        )
-        .add_systems(Update, check_game_over.run_if(in_state(GameState::Game)))
-        .add_systems(OnEnter(GameState::GameOver), setup_game_over_menu)
-        .add_systems(
-            OnExit(GameState::GameOver),
-            (full_game_cleanup, despawn_screen::<OnGameOverScreen>),
-        )
-        .add_systems(
-            Update,
-            game_over_menu_action.run_if(in_state(GameState::GameOver)),
-        )
-        .add_systems(
-            Update,
-            (menu_action, button_system).run_if(in_state(GameState::GameOver)),
-        )
-        .add_systems(OnExit(GameState::Game), despawn_screen::<OnGameScreen>);
+            // `chain`ing systems together runs them in order
+            .chain()
+            .run_if(in_state(GameState::Game)),
+    )
+    .add_systems(
+        Update,
+        (update_scoreboard, update_lives, update_high_score).run_if(in_state(GameState::Game)),
+    )
+    .add_systems(Update, check_game_over.run_if(in_state(GameState::Game)))
+    .add_systems(OnEnter(GameState::GameOver), setup_game_over_menu)
+    .add_systems(
+        OnExit(GameState::GameOver),
+        (full_game_cleanup, despawn_screen::<OnGameOverScreen>),
+    )
+    .add_systems(
+        Update,
+        game_over_menu_action.run_if(in_state(GameState::GameOver)),
+    )
+    .add_systems(
+        Update,
+        update_game_over_scores.run_if(in_state(GameState::GameOver)),
+    )
+    .add_systems(
+        Update,
+        (menu_action, button_system).run_if(in_state(GameState::GameOver)),
+    )
+    .add_systems(OnExit(GameState::Game), despawn_screen::<OnGameScreen>);
 }
 
 // Tag component used to tag entities added on the game screen
@@ -400,8 +403,26 @@ fn game(
     }
 }
 
+// Setup the character
+
+fn setup_main_character(mut commands: Commands, asset_server: Res<AssetServer>) {
+    // CHARACTER COMPONENTS
+    
+    let character: Handle<Image> = asset_server.load("textures/player_idle_0.png");
+    
+    commands.spawn(Sprite::from_image(
+        asset_server.load("textures/player_idle_0.png"),
+    ));
+}
+
 #[derive(Component)]
 struct OnGameOverScreen;
+
+#[derive(Component)]
+struct GameOverScoreUi;
+
+#[derive(Component)]
+struct GameOverHighScoreUi;
 
 impl WallLocation {
     /// Location of the *center* of the wall, used in `transform.translation()`
@@ -553,6 +574,22 @@ fn full_game_cleanup(
     commands.remove_resource::<Score>();
 }
 
+fn update_game_over_scores(
+    score: Res<Score>,
+    high_score: Res<HighScore>,
+    score_root: Query<Entity, With<GameOverScoreUi>>,
+    high_score_root: Query<Entity, With<GameOverHighScoreUi>>,
+    mut writer: TextUiWriter,
+) {
+    if let Ok(score_entity) = score_root.get_single() {
+        *writer.text(score_entity, 1) = score.to_string();
+    }
+
+    if let Ok(high_entity) = high_score_root.get_single() {
+        *writer.text(high_entity, 1) = high_score.to_string();
+    }
+}
+
 fn setup_game_over_menu(mut commands: Commands, asset_server: Res<AssetServer>) {
     let button_style = Node {
         width: Val::Px(200.0),
@@ -597,6 +634,48 @@ fn setup_game_over_menu(mut commands: Commands, asset_server: Res<AssetServer>) 
             BackgroundColor(NORMAL_BUTTON),
             children![
                 (
+                    Text::new("Score: "),
+                    TextFont {
+                        font_size: 30.0,
+                        ..default()
+                    },
+                    TextColor(TEXT_COLOR),
+                    GameOverScoreUi,
+                    Node {
+                        margin: UiRect::all(Val::Px(10.0)),
+                        ..default()
+                    },
+                    children![(
+                        TextSpan::default(),
+                        TextFont {
+                            font_size: 30.0,
+                            ..default()
+                        },
+                        TextColor(SCORE_COLOR),
+                    )],
+                ),
+                (
+                    Text::new("High Score: "),
+                    TextFont {
+                        font_size: 30.0,
+                        ..default()
+                    },
+                    TextColor(TEXT_COLOR),
+                    GameOverHighScoreUi,
+                    Node {
+                        margin: UiRect::all(Val::Px(10.0)),
+                        ..default()
+                    },
+                    children![(
+                        TextSpan::default(),
+                        TextFont {
+                            font_size: 30.0,
+                            ..default()
+                        },
+                        TextColor(SCORE_COLOR),
+                    )],
+                ),
+                (
                     Text::new("Game Over"),
                     TextFont {
                         font_size: 64.0,
@@ -627,7 +706,7 @@ fn setup_game_over_menu(mut commands: Commands, asset_server: Res<AssetServer>) 
                         (ImageNode::new(quit_icon), icon_style),
                         (Text::new("Exit"), font, TextColor(TEXT_COLOR)),
                     ]
-                )
+                ),
             ]
         )],
     ));
