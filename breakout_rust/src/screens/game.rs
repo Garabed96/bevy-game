@@ -16,6 +16,41 @@ use bevy::{
     prelude::*,
 };
 
+// Saving HighScore in a file
+use serde::{Deserialize, Serialize};
+
+#[derive(Resource, Serialize, Deserialize)]
+pub struct HighScore(pub usize);
+
+use std::fs;
+
+use std::fmt;
+
+impl fmt::Display for HighScore {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+pub fn save_high_score(score: usize) {
+    let json = serde_json::to_string(&score).unwrap();
+    fs::write("highscore.json", json).unwrap();
+}
+
+pub fn load_high_score() -> HighScore {
+    let data = fs::read_to_string("highscore.json").unwrap_or("0".to_string());
+    let value: usize = serde_json::from_str(&data).unwrap_or(0);
+    info!("HighScore: {}", value); // only borrows, doesn't remove ownership
+    return HighScore(value);
+}
+
+fn check_high_score(score: Res<Score>, high_score: &mut ResMut<HighScore>) {
+    if **score > high_score.0 {
+        high_score.0 = **score;
+        save_high_score(**score);
+    }
+}
+
 use crate::menu;
 use crate::screens::splash;
 use crate::stepping;
@@ -60,6 +95,8 @@ const LIVES_FONT_SIZE: f32 = 33.0;
 const LIVES_TEXT_PADDING: Val = Val::Px(5.0);
 const LIVES_TOP_PADDING: Val = Val::Px(50.0); // Moves it lower down
 const INITIAL_LIVES: usize = 3;
+
+const HIGH_SCORE_TOP_PADDING: Val = Val::Px(100.0);
 
 const BACKGROUND_COLOR: Color = Color::srgb(0.9, 0.9, 0.9);
 const PADDLE_COLOR: Color = Color::srgb(0.0, 0.8, 0.2); // bright green
@@ -125,42 +162,43 @@ pub fn game_plugin(app: &mut App) {
             .add_schedule(FixedUpdate)
             .at(Val::Percent(35.0), Val::Percent(50.0)),
     )
-    .insert_resource(Score(0))
-    .insert_resource(ClearColor(BACKGROUND_COLOR))
-    .insert_resource(Lives(INITIAL_LIVES))
-    .add_event::<CollisionEvent>()
-    .add_systems(OnEnter(GameState::Game), game_setup)
-    .add_systems(
-        FixedUpdate,
-        (
-            apply_velocity,
-            move_paddle,
-            check_for_collisions,
-            play_collision_sound,
+        .insert_resource(Score(0))
+        .insert_resource(load_high_score())
+        .insert_resource(ClearColor(BACKGROUND_COLOR))
+        .insert_resource(Lives(INITIAL_LIVES))
+        .add_event::<CollisionEvent>()
+        .add_systems(OnEnter(GameState::Game), game_setup)
+        .add_systems(
+            FixedUpdate,
+            (
+                apply_velocity,
+                move_paddle,
+                check_for_collisions,
+                play_collision_sound,
+            )
+                // `chain`ing systems together runs them in order
+                .chain()
+                .run_if(in_state(GameState::Game)),
         )
-            // `chain`ing systems together runs them in order
-            .chain()
-            .run_if(in_state(GameState::Game)),
-    )
-    .add_systems(
-        Update,
-        (update_scoreboard, update_lives).run_if(in_state(GameState::Game)),
-    )
-    .add_systems(Update, check_game_over.run_if(in_state(GameState::Game)))
-    .add_systems(OnEnter(GameState::GameOver), setup_game_over_menu)
-    .add_systems(
-        OnExit(GameState::GameOver),
-        (full_game_cleanup, despawn_screen::<OnGameOverScreen>),
-    )
-    .add_systems(
-        Update,
-        game_over_menu_action.run_if(in_state(GameState::GameOver)),
-    )
-    .add_systems(
-        Update,
-        (menu_action, button_system).run_if(in_state(GameState::GameOver)),
-    )
-    .add_systems(OnExit(GameState::Game), despawn_screen::<OnGameScreen>);
+        .add_systems(
+            Update,
+            (update_scoreboard, update_lives, update_high_score).run_if(in_state(GameState::Game)),
+        )
+        .add_systems(Update, check_game_over.run_if(in_state(GameState::Game)))
+        .add_systems(OnEnter(GameState::GameOver), setup_game_over_menu)
+        .add_systems(
+            OnExit(GameState::GameOver),
+            (full_game_cleanup, despawn_screen::<OnGameOverScreen>),
+        )
+        .add_systems(
+            Update,
+            game_over_menu_action.run_if(in_state(GameState::GameOver)),
+        )
+        .add_systems(
+            Update,
+            (menu_action, button_system).run_if(in_state(GameState::GameOver)),
+        )
+        .add_systems(OnExit(GameState::Game), despawn_screen::<OnGameScreen>);
 }
 
 // Tag component used to tag entities added on the game screen
@@ -250,6 +288,32 @@ fn game_setup(
         Node {
             position_type: PositionType::Absolute,
             top: LIVES_TOP_PADDING,
+            left: LIVES_TEXT_PADDING,
+            ..default()
+        },
+        children![(
+            TextSpan::default(),
+            TextFont {
+                font_size: LIVES_FONT_SIZE,
+                ..default()
+            },
+            TextColor(LIVE_COLOR),
+        )],
+    ));
+
+    // High score
+    commands.spawn((
+        OnGameScreen,
+        Text::new("HScore: "),
+        TextFont {
+            font_size: SCOREBOARD_FONT_SIZE,
+            ..default()
+        },
+        TextColor(TEXT_COLOR),
+        HighScoreUi,
+        Node {
+            position_type: PositionType::Absolute,
+            top: HIGH_SCORE_TOP_PADDING,
             left: LIVES_TEXT_PADDING,
             ..default()
         },
@@ -400,6 +464,9 @@ struct Deadly;
 
 #[derive(Component)]
 struct ScoreboardUi;
+
+#[derive(Component)]
+struct HighScoreUi;
 
 #[derive(Component)]
 struct LivesUi;
@@ -577,6 +644,14 @@ fn update_lives(
     *writer.text(*lives_root, 1) = lives.to_string();
 }
 
+fn update_high_score(
+    high_score: Res<HighScore>,
+    high_score_root: Single<Entity, (With<Text>, With<HighScoreUi>)>,
+    mut writer: TextUiWriter,
+) {
+    *writer.text(*high_score_root, 1) = high_score.to_string();
+}
+
 fn check_for_collisions(
     mut commands: Commands,
     mut score: ResMut<Score>,
@@ -642,8 +717,15 @@ fn check_for_collisions(
     }
 }
 
-fn check_game_over(lives: Res<Lives>, mut next_state: ResMut<NextState<GameState>>) {
+fn check_game_over(
+    lives: Res<Lives>,
+    score: Res<Score>,
+    mut high_score: ResMut<HighScore>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
     if **lives == 0 {
+        info!("Updating highscore, if new high score exists...");
+        check_high_score(score, &mut high_score);
         info!("Entered GameOver state — spawning game over screen");
         next_state.set(GameState::GameOver);
     }
