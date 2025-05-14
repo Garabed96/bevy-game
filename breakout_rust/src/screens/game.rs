@@ -173,7 +173,7 @@ pub fn game_plugin(app: &mut App) {
             move_paddle,
             check_for_collisions,
             play_collision_sound,
-            setup_main_character,
+            setup_texture_character,
         )
             // `chain`ing systems together runs them in order
             .chain()
@@ -404,12 +404,46 @@ fn game(
 }
 
 // Setup the character
+#[derive(Component, Clone)]
+struct AnimationIndices {
+    first: usize,
+    last: usize,
+}
 
-fn setup_main_character(mut commands: Commands, asset_server: Res<AssetServer>) {
+struct SpriteSheet {
+    size: Vec2,
+    text: String,
+    transform: Transform,
+    texture: Handle<Image>,
+    image_mode: SpriteImageMode,
+    atlas: TextureAtlas,
+    indices: AnimationIndices,
+    timer: AnimationTimer,
+}
+
+#[derive(Component, Deref, DerefMut)]
+struct AnimationTimer(Timer);
+
+fn setup_texture_character(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
+) {
     // CHARACTER COMPONENTS
-    
-    let character: Handle<Image> = asset_server.load("textures/player_idle_0.png");
-    
+
+    let character: Handle<Image> = asset_server.load("textures/player_idle_sheet.png");
+    let animation_indices_character = AnimationIndices { first: 0, last: 7 };
+    let character_atlas = TextureAtlas {
+        layout: texture_atlas_layouts.add(TextureAtlasLayout::from_grid(
+            UVec2::new(300, 256),
+            8,
+            1,
+            None,
+            None,
+        )),
+        index: animation_indices_character.first,
+    };
+
     commands.spawn(Sprite::from_image(
         asset_server.load("textures/player_idle_0.png"),
     ));
