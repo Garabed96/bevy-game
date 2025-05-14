@@ -68,13 +68,13 @@ const BALL_DIAMETER: f32 = 30.;
 const BALL_SPEED: f32 = 400.0;
 const INITIAL_BALL_DIRECTION: Vec2 = Vec2::new(0.5, -0.5);
 
-const WALL_THICKNESS: f32 = 10.0;
+pub const WALL_THICKNESS: f32 = 10.0;
 // x coordinates
-const LEFT_WALL: f32 = -450.;
-const RIGHT_WALL: f32 = 450.;
+pub const LEFT_WALL: f32 = -450.;
+pub const RIGHT_WALL: f32 = 450.;
 // y coordinates
-const BOTTOM_WALL: f32 = -300.;
-const TOP_WALL: f32 = 300.;
+pub const BOTTOM_WALL: f32 = -300.;
+pub const TOP_WALL: f32 = 300.;
 
 const BRICK_SIZE: Vec2 = Vec2::new(100., 30.);
 // These values are exact
@@ -151,6 +151,7 @@ use bevy::{
     color::palettes::basic::{BLUE, LIME},
     prelude::*,
 };
+use crate::screens::move_character::sprite_movement;
 
 // This plugin will contain the game. In this case, it's just be a screen that will
 // display the current settings for 5 seconds before returning to the menu
@@ -175,6 +176,7 @@ pub fn game_plugin(app: &mut App) {
         (
             apply_velocity,
             move_paddle,
+            sprite_movement,
             check_for_collisions,
             play_collision_sound,
         )

@@ -7,10 +7,15 @@ use bevy::prelude::{
     Text2d, TextColor, TextFont, TextLayout, Time, Timer, TimerMode, Transform,
 };
 
+use crate::screens::move_character::{sprite_movement};
+
 #[derive(Component, Deref, DerefMut)]
 pub struct AnimationTimer(Timer);
 
 // Setup the character
+#[derive(Component)]
+pub struct Character;
+
 #[derive(Component, Clone)]
 pub struct AnimationIndices {
     first: usize,
@@ -89,6 +94,7 @@ pub fn setup_texture_character(
                 custom_size: Some(sprite_sheet.size),
                 ..Sprite::from_atlas_image(sprite_sheet.texture.clone(), sprite_sheet.atlas.clone())
             },
+            Character,
             sprite_sheet.indices,
             sprite_sheet.timer,
             sprite_sheet.transform,
