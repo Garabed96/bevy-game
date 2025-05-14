@@ -3,4 +3,5 @@
 2. Added High Score and current score to game over. 
 3. Let's add a character sprite
 4. Make the character move left and right
+5. Lets move the character to the top of the paddle no?
 5. Make the Character shoot bullets...

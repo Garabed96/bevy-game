@@ -3,11 +3,12 @@ use bevy::asset::{AssetServer, Assets, Handle};
 use bevy::image::{Image, TextureAtlas, TextureAtlasLayout};
 use bevy::math::{UVec2, Vec2, Vec3};
 use bevy::prelude::{
-    Commands, Component, Deref, DerefMut, JustifyText, Query, Res, ResMut, Sprite, SpriteImageMode,
-    Text2d, TextColor, TextFont, TextLayout, Time, Timer, TimerMode, Transform,
+    default, Commands, Component, Deref, DerefMut, JustifyText, Query, Res, ResMut, Sprite,
+    SpriteImageMode, Text2d, TextColor, TextFont, TextLayout, Time, Timer, TimerMode, Transform,
 };
 
-use crate::screens::move_character::{sprite_movement};
+use crate::screens::game::{BOTTOM_WALL, GAP_BETWEEN_PADDLE_AND_FLOOR};
+use crate::screens::move_character::sprite_movement;
 
 #[derive(Component, Deref, DerefMut)]
 pub struct AnimationTimer(Timer);
@@ -72,12 +73,14 @@ pub fn setup_texture_character(
         index: animation_indices_character.first,
     };
 
+    let character_y = BOTTOM_WALL + GAP_BETWEEN_PADDLE_AND_FLOOR + 50f32;
+
     // TODO: Add ability to name your character, save in json for now
     let sprint_sheets = [SpriteSheet {
         size: Vec2::new(300., 256.),
         text: "Champ Champ".to_string(),
         transform: Transform {
-            translation: Vec3::new(1. * 300. * 0.25, 0.0, 0.0),
+            translation: Vec3::new(0.0, character_y, 0.0),
             ..Transform::from_scale(Vec3::splat(0.25))
         },
         texture: character.clone(),
@@ -87,8 +90,10 @@ pub fn setup_texture_character(
         timer: AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
     }];
 
+
     for sprite_sheet in sprint_sheets {
         let mut cmd = commands.spawn((
+            crate::screens::game::OnGameScreen,
             Sprite {
                 image_mode: sprite_sheet.image_mode,
                 custom_size: Some(sprite_sheet.size),

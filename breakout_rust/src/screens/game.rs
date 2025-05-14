@@ -58,7 +58,7 @@ use menu::{MenuButtonAction, NORMAL_BUTTON};
 // These constants are defined in `Transform` units.
 // Using the default 2D camera they correspond 1:1 with screen pixels.
 const PADDLE_SIZE: Vec2 = Vec2::new(120.0, 20.0);
-const GAP_BETWEEN_PADDLE_AND_FLOOR: f32 = 60.0;
+pub const GAP_BETWEEN_PADDLE_AND_FLOOR: f32 = 60.0;
 const PADDLE_SPEED: f32 = 500.0;
 // How close can the paddle get to the wall
 const PADDLE_PADDING: f32 = 10.0;
@@ -217,7 +217,7 @@ pub fn game_plugin(app: &mut App) {
 
 // Tag component used to tag entities added on the game screen
 #[derive(Component)]
-struct OnGameScreen;
+pub struct OnGameScreen;
 
 #[derive(Resource, Deref, DerefMut)]
 struct GameTimer(Timer);

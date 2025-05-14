@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 const CHARACTER_SPEED: f32 = 500.0;
-const CHARACTER_SIZE: Vec2 = Vec2::new(300.0, 256.0);
+pub const CHARACTER_SIZE: Vec2 = Vec2::new(300.0, 256.0);
 const CHARACTER_PADDING: f32 = 10.0;
 
 #[derive(Component)]
