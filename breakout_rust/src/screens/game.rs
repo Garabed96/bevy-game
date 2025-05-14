@@ -165,7 +165,10 @@ pub fn game_plugin(app: &mut App) {
     .insert_resource(ClearColor(BACKGROUND_COLOR))
     .insert_resource(Lives(INITIAL_LIVES))
     .add_event::<CollisionEvent>()
-    .add_systems(OnEnter(GameState::Game), game_setup)
+    .add_systems(
+        OnEnter(GameState::Game),
+        (game_setup, setup_texture_character),
+    )
     .add_systems(
         FixedUpdate,
         (
@@ -173,7 +176,6 @@ pub fn game_plugin(app: &mut App) {
             move_paddle,
             check_for_collisions,
             play_collision_sound,
-            setup_texture_character,
         )
             // `chain`ing systems together runs them in order
             .chain()
@@ -181,7 +183,13 @@ pub fn game_plugin(app: &mut App) {
     )
     .add_systems(
         Update,
-        (update_scoreboard, update_lives, update_high_score).run_if(in_state(GameState::Game)),
+        (
+            update_scoreboard,
+            update_lives,
+            update_high_score,
+            animate_sprite,
+        )
+            .run_if(in_state(GameState::Game)),
     )
     .add_systems(Update, check_game_over.run_if(in_state(GameState::Game)))
     .add_systems(OnEnter(GameState::GameOver), setup_game_over_menu)
@@ -403,13 +411,6 @@ fn game(
     }
 }
 
-// Setup the character
-#[derive(Component, Clone)]
-struct AnimationIndices {
-    first: usize,
-    last: usize,
-}
-
 struct SpriteSheet {
     size: Vec2,
     text: String,
@@ -420,9 +421,6 @@ struct SpriteSheet {
     indices: AnimationIndices,
     timer: AnimationTimer,
 }
-
-#[derive(Component, Deref, DerefMut)]
-struct AnimationTimer(Timer);
 
 fn setup_texture_character(
     mut commands: Commands,
@@ -445,21 +443,19 @@ fn setup_texture_character(
     };
 
     // TODO: Add ability to name your character, save in json for now
-    let sprint_sheets = [
-        SpriteSheet {
-            size: Vec2::new(300., 256.),
-            text: "Champ Champ".to_string(),
-            transform: Transform {
-                translation: Vec3::new(1. * 300. * 0.25, 0.0, 0.0),
-                ..Transform::from_scale(Vec3::splat(0.25))
-            },
-            texture: character.clone(),
-            image_mode: SpriteImageMode::Auto,
-            atlas: character_atlas.clone(),
-            indices: animation_indices_character.clone(),
-            timer: AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
-        }
-    ];
+    let sprint_sheets = [SpriteSheet {
+        size: Vec2::new(300., 256.),
+        text: "Champ Champ".to_string(),
+        transform: Transform {
+            translation: Vec3::new(1. * 300. * 0.25, 0.0, 0.0),
+            ..Transform::from_scale(Vec3::splat(0.25))
+        },
+        texture: character.clone(),
+        image_mode: SpriteImageMode::Auto,
+        atlas: character_atlas.clone(),
+        indices: animation_indices_character.clone(),
+        timer: AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
+    }];
 
     for sprite_sheet in sprint_sheets {
         let mut cmd = commands.spawn((
@@ -480,9 +476,38 @@ fn setup_texture_character(
                 TextColor(TEXT_COLOR),
                 TextFont::from_font_size(55.),
                 Transform::from_xyz(0., -256. * 0.5 - 10., 0.),
-                bevy::sprite::Anchor::BottomCenter,
+                bevy::sprite::Anchor::TopCenter,
             ));
         });
+    }
+}
+
+#[derive(Component, Deref, DerefMut)]
+struct AnimationTimer(Timer);
+
+// Setup the character
+#[derive(Component, Clone)]
+struct AnimationIndices {
+    first: usize,
+    last: usize,
+}
+
+fn animate_sprite(
+    time: Res<Time>,
+    mut query: Query<(&AnimationIndices, &mut AnimationTimer, &mut Sprite)>,
+) {
+    for (indices, mut timer, mut sprite) in &mut query {
+        timer.tick(time.delta());
+
+        if timer.just_finished() {
+            if let Some(atlas) = &mut sprite.texture_atlas {
+                atlas.index = if atlas.index == indices.last {
+                    indices.first
+                } else {
+                    atlas.index + 1
+                };
+            }
+        }
     }
 }
 
