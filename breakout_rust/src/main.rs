@@ -31,6 +31,7 @@ enum GameState {
     Game,
     Splash,
     GameOver,
+    Retry,
 }
 
 fn main() {

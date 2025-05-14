@@ -69,7 +69,7 @@ mod menu {
 
     // State used for the current menu screen
     #[derive(Clone, Copy, Default, Eq, PartialEq, Debug, Hash, States)]
-    enum MenuState {
+    pub enum MenuState {
         Main,
         Settings,
         SettingsDisplay,
@@ -101,7 +101,7 @@ mod menu {
 
     // Tag component used to mark which setting is currently selected
     #[derive(Component)]
-    struct SelectedOption;
+    pub struct SelectedOption;
 
     // All actions that can be triggered from a button click
     #[derive(Component)]
@@ -112,12 +112,12 @@ mod menu {
         SettingsSound,
         BackToMainMenu,
         BackToSettings,
-        // Retry,
+        Retry,
         Quit,
     }
 
     // This system handles changing all buttons color based on mouse interaction
-    fn button_system(
+    pub fn button_system(
         mut interaction_query: Query<
             (&Interaction, &mut BackgroundColor, Option<&SelectedOption>),
             (Changed<Interaction>, With<Button>),
@@ -480,7 +480,7 @@ mod menu {
         ));
     }
 
-    fn menu_action(
+    pub fn menu_action(
         interaction_query: Query<
             (&Interaction, &MenuButtonAction),
             (Changed<Interaction>, With<Button>),
@@ -506,6 +506,10 @@ mod menu {
                     MenuButtonAction::SettingsSound => {
                         menu_state.set(MenuState::SettingsSound);
                     }
+                    MenuButtonAction::Retry => {
+                        game_state.set(GameState::Game);
+                        menu_state.set(MenuState::Disabled);
+                    }
                     MenuButtonAction::BackToMainMenu => menu_state.set(MenuState::Main),
                     MenuButtonAction::BackToSettings => {
                         menu_state.set(MenuState::Settings);
@@ -518,4 +522,4 @@ mod menu {
 
 
 pub use menu::menu_plugin;
-pub use menu::{NORMAL_BUTTON, MenuButtonAction};
+pub use menu::{NORMAL_BUTTON, MenuButtonAction, button_system, menu_action};
