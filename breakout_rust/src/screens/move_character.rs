@@ -19,12 +19,12 @@ pub fn sprite_movement(
 ) {
     let mut direction = 0.0;
 
-    if keyboard_input.pressed(KeyCode::ArrowLeft) {
-        direction -= 2.0;
+    if keyboard_input.pressed(KeyCode::KeyA) {
+        direction -= 1.0;
     }
 
-    if keyboard_input.pressed(KeyCode::ArrowRight) {
-        direction += 2.0;
+    if keyboard_input.pressed(KeyCode::KeyD) {
+        direction += 1.0;
     }
 
     // Calculate the new horizontal paddle position based on player input
