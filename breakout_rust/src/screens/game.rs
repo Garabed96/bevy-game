@@ -244,28 +244,28 @@ fn game_setup(
     // Paddle
     let paddle_y = BOTTOM_WALL + GAP_BETWEEN_PADDLE_AND_FLOOR;
 
-    commands.spawn((
-        OnGameScreen,
-        Sprite::from_color(PADDLE_COLOR, Vec2::ONE),
-        Transform {
-            translation: Vec3::new(0.0, paddle_y, 0.0),
-            scale: PADDLE_SIZE.extend(1.0),
-            ..default()
-        },
-        Paddle,
-        Collider,
-    ));
+    // commands.spawn((
+    //     OnGameScreen,
+    //     Sprite::from_color(PADDLE_COLOR, Vec2::ONE),
+    //     Transform {
+    //         translation: Vec3::new(0.0, paddle_y, 0.0),
+    //         scale: PADDLE_SIZE.extend(1.0),
+    //         ..default()
+    //     },
+    //     Paddle,
+    //     Collider,
+    // ));
 
     // Ball
-    commands.spawn((
-        OnGameScreen,
-        Mesh2d(meshes.add(Circle::default())),
-        MeshMaterial2d(materials.add(BALL_COLOR)),
-        Transform::from_translation(BALL_STARTING_POSITION)
-            .with_scale(Vec2::splat(BALL_DIAMETER).extend(1.)),
-        Ball,
-        Velocity(INITIAL_BALL_DIRECTION.normalize() * BALL_SPEED),
-    ));
+    // commands.spawn((
+    //     OnGameScreen,
+    //     Mesh2d(meshes.add(Circle::default())),
+    //     MeshMaterial2d(materials.add(BALL_COLOR)),
+    //     Transform::from_translation(BALL_STARTING_POSITION)
+    //         .with_scale(Vec2::splat(BALL_DIAMETER).extend(1.)),
+    //     Ball,
+    //     Velocity(INITIAL_BALL_DIRECTION.normalize() * BALL_SPEED),
+    // ));
 
     // Scoreboard
     commands.spawn((
