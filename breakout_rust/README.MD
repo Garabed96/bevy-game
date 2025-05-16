@@ -15,6 +15,14 @@
 
 # May 15 Scratch File for thoughts; 
 Ok, so should we have a character_bow file; 
+
+
+Ok lets actually restart this list. 
+1. We created the horizontal png for the idle / shooting for bow (DONE)
+2. Repeat for Spear and Sword.
+3. 
+
+
 1. Render the bow sprite, but first do we attach it to the character? 
 2. Right now look at mesh && collision though. How does collision work 
 

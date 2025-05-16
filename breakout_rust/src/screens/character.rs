@@ -1,14 +1,15 @@
 use crate::screens::game::TEXT_COLOR;
+use crate::screens::game::{BOTTOM_WALL, GAP_BETWEEN_PADDLE_AND_FLOOR};
+use crate::screens::move_character::sprite_movement;
 use bevy::asset::{AssetServer, Assets, Handle};
 use bevy::image::{Image, TextureAtlas, TextureAtlasLayout};
 use bevy::math::{UVec2, Vec2, Vec3};
+use bevy::prelude::*;
 use bevy::prelude::{
     default, Commands, Component, Deref, DerefMut, JustifyText, Query, Res, ResMut, Sprite,
     SpriteImageMode, Text2d, TextColor, TextFont, TextLayout, Time, Timer, TimerMode, Transform,
 };
-
-use crate::screens::game::{BOTTOM_WALL, GAP_BETWEEN_PADDLE_AND_FLOOR};
-use crate::screens::move_character::sprite_movement;
+use std::collections::HashMap;
 
 #[derive(Component, Deref, DerefMut)]
 pub struct AnimationTimer(Timer);
@@ -53,67 +54,122 @@ struct SpriteSheet {
     timer: AnimationTimer,
 }
 
-pub fn setup_texture_character(
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlayerState {
+    Idle,
+    Run,
+    Roll,
+    Jump,
+    Die,
+    Climb,
+}
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Weapon {
+    #[default]
+    Unarmed,
+    Sword,
+    Bow,
+    Spear,
+}
+
+// One Atlas per weapon, TextureAtlas; in Bevy is basically a sprite-sheet
+#[derive(Resource)]
+pub struct IdleAtlases {
+    pub map: HashMap<Weapon, (Handle<Image>, Handle<TextureAtlasLayout>)>,
+}
+
+#[derive(Component, Debug, Clone)]
+pub struct Player {
+    pub state: PlayerState,
+    pub health: u32,
+    pub max_health: u32,
+    pub jump_speed: f32,
+    pub speed: f32,
+    pub gravity: f32,
+    pub jump_count: u32,
+}
+
+pub fn setup_idle_atlases(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
+    mut layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) {
-    // CHARACTER COMPONENTS
 
-    let character: Handle<Image> = asset_server.load("textures/player_idle_sheet.png");
-    let animation_indices_character = AnimationIndices { first: 0, last: 7 };
-    let character_atlas = TextureAtlas {
-        layout: texture_atlas_layouts.add(TextureAtlasLayout::from_grid(
-            UVec2::new(300, 256),
-            8,
-            1,
-            None,
-            None,
-        )),
-        index: animation_indices_character.first,
-    };
+    let mut map = HashMap::new();
 
-    let character_y = BOTTOM_WALL + GAP_BETWEEN_PADDLE_AND_FLOOR + 50f32;
+    // Unarmed / Sword / Bow is 8x(300x256):
 
-    // TODO: Add ability to name your character, save in json for now
-    let sprint_sheets = [SpriteSheet {
-        size: Vec2::new(300., 256.),
-        text: "Champ Champ".to_string(),
-        transform: Transform {
-            translation: Vec3::new(0.0, character_y, 0.0),
-            ..Transform::from_scale(Vec3::splat(0.25))
-        },
-        texture: character.clone(),
-        image_mode: SpriteImageMode::Auto,
-        atlas: character_atlas.clone(),
-        indices: animation_indices_character.clone(),
-        timer: AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
-    }];
+    // Unarmed
+    let unarmed_character_idle: Handle<Image> =
+        asset_server.load("textures/player/idle/unarmed_player_idle.png");
+    let layout_unarmed_idle = TextureAtlasLayout::from_grid(UVec2::new(300, 256), 8, 1, None, None);
+    let handle_unarmed_handle = layouts.add(layout_unarmed_idle);
+    map.insert(Weapon::Unarmed, (unarmed_character_idle.clone(), handle_unarmed_handle));
 
+    // let animation_indices_character = AnimationIndices { first: 0, last: 7 };
 
-    for sprite_sheet in sprint_sheets {
-        let mut cmd = commands.spawn((
-            crate::screens::game::OnGameScreen,
-            Sprite {
-                image_mode: sprite_sheet.image_mode,
-                custom_size: Some(sprite_sheet.size),
-                ..Sprite::from_atlas_image(sprite_sheet.texture.clone(), sprite_sheet.atlas.clone())
+    // Sword
+    let sword_character_idle: Handle<Image> = asset_server.load("textures/player/idle/sword_idle.png");
+    let layout_sword_idle = TextureAtlasLayout::from_grid(UVec2::new(300, 256), 8, 1, None, None);
+    let handle_sword_handle = layouts.add(layout_sword_idle);
+    map.insert(Weapon::Sword, (sword_character_idle.clone(), handle_sword_handle));
+
+    // Bow
+    let bow_character_idle: Handle<Image> = asset_server.load("textures/player/idle/bow_idle.png");
+    let layout_bow_idle = TextureAtlasLayout::from_grid(UVec2::new(300, 256), 8, 1, None, None);
+    let handle_bow_handle = layouts.add(layout_bow_idle);
+    map.insert(Weapon::Bow, (bow_character_idle.clone(), handle_bow_handle));
+
+    // Spear is 8x(540x320):
+    let spear_character_idle: Handle<Image> = asset_server.load("textures/player/idle/spear_idle.png");
+    let layout_spear_idle = TextureAtlasLayout::from_grid(UVec2::new(540, 320), 8, 1, None, None);
+    let handle_spear_handle = layouts.add(layout_spear_idle);
+    map.insert(Weapon::Spear, (spear_character_idle.clone(), handle_spear_handle));
+
+    // store in a resource for later
+    commands.insert_resource(IdleAtlases { map });
+}
+
+#[derive(Bundle)]
+pub struct PlayerBundle {
+    /// the `Sprite` with its atlas baked in
+    sprite: Sprite,
+    /// entity positioning in world
+    transform: Transform,
+    global_transform: GlobalTransform,
+
+    /// your marker so you can `Query<With<Character>>`
+    character: Character,
+    /// current weapon choice
+    weapon: Weapon,
+    /// frame‐range for the current animation
+    indices: AnimationIndices,
+    /// driving the timer for the sprite flip
+    timer: AnimationTimer,
+}
+
+pub fn setup_player(mut commands: Commands, atlases: Res<IdleAtlases>) {
+    let (image_handle, layout_handle) = &atlases.map[&Weapon::Unarmed];
+    let y = BOTTOM_WALL + GAP_BETWEEN_PADDLE_AND_FLOOR + 50.0;
+
+    commands.spawn(PlayerBundle {
+        sprite: Sprite::from_atlas_image(
+            image_handle.clone(),
+            TextureAtlas {
+                layout: layout_handle.clone(),
+                index: 0,
             },
-            Character,
-            sprite_sheet.indices,
-            sprite_sheet.timer,
-            sprite_sheet.transform,
-        ));
-
-        cmd.with_children(|builder| {
-            builder.spawn((
-                Text2d::new(sprite_sheet.text),
-                TextLayout::new_with_justify(JustifyText::Center),
-                TextColor(TEXT_COLOR),
-                TextFont::from_font_size(55.),
-                Transform::from_xyz(0., -256. * 0.5 - 10., 0.),
-                bevy::sprite::Anchor::TopCenter,
-            ));
-        });
-    }
+        ),
+        transform: Transform {
+            translation: Vec3::new(0.0, y, 0.0),
+            scale: Vec3::splat(0.25),
+            ..Default::default()
+        },
+        global_transform: Default::default(),
+        character: Character,
+        weapon: Weapon::Unarmed,
+        indices: AnimationIndices { first: 0, last: 7 },
+        timer: AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
+    });
 }

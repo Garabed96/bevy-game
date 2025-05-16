@@ -145,13 +145,14 @@ enum WallLocation {
     Top,
 }
 
-use crate::screens::character::{animate_sprite, setup_texture_character};
+use crate::screens::character::{animate_sprite, setup_idle_atlases, setup_player};
+use crate::screens::character_weapons::{apply_weapon_change, weapon_switch};
+use crate::screens::move_character::sprite_movement;
 use crate::{despawn_screen, DisplayQuality, GameState, Volume};
 use bevy::{
     color::palettes::basic::{BLUE, LIME},
     prelude::*,
 };
-use crate::screens::move_character::sprite_movement;
 
 // This plugin will contain the game. In this case, it's just be a screen that will
 // display the current settings for 5 seconds before returning to the menu
@@ -167,9 +168,10 @@ pub fn game_plugin(app: &mut App) {
     .insert_resource(ClearColor(BACKGROUND_COLOR))
     .insert_resource(Lives(INITIAL_LIVES))
     .add_event::<CollisionEvent>()
+    .add_systems(OnEnter(GameState::Game), game_setup)
     .add_systems(
         OnEnter(GameState::Game),
-        (game_setup, setup_texture_character),
+        (setup_idle_atlases, setup_player).chain(),
     )
     .add_systems(
         FixedUpdate,
@@ -187,6 +189,8 @@ pub fn game_plugin(app: &mut App) {
     .add_systems(
         Update,
         (
+            weapon_switch,
+            apply_weapon_change,
             update_scoreboard,
             update_lives,
             update_high_score,
